@@ -36,6 +36,8 @@ Provides settings to control various aspects relating to Lunar Coins, including 
 
 ## Changelog
 
+2.3.8 - Fix multiplayer clients spawning dead/off-map: run PrefabSetup after Run.Start, update Addressable keys for current game paths, avoid SetSyncVar on shared prefabs, and harden PrefabSetup/IL hook failures so they cannot abort run init.
+
 2.3.7 - fixed for ac
 
 2.3.6 - fixed for sots 2.0

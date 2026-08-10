@@ -11,15 +11,20 @@ namespace EphemeralCoins
 
 		public static ArtifactDef NewMoonArtifact;
 
-        internal static string[] lunarInteractables = {
-            "RoR2/Base/LunarRecycler/LunarRecycler.prefab",
-            "RoR2/Base/LunarChest/LunarChest.prefab",
-            "RoR2/Base/LunarShopTerminal/LunarShopTerminal.prefab",
-            "RoR2/Base/bazaar/SeerStation.prefab",
-            "RoR2/Base/moon/FrogInteractable.prefab"
-        };
+		internal const string PickupLunarCoin = "RoR2/Base/MiscPickups/LunarCoin/PickupLunarCoin.prefab";
+		internal const string LunarCoinMesh = "RoR2/Base/Common/VFX/Coins/mdlLunarCoin.fbx";
+		internal const string LunarCoinWithHoleMesh = "RoR2/Base/Common/VFX/Coins/mdlLunarCoinWithHole.fbx";
+		internal const string LunarCoinPlaceholderMat = "RoR2/Base/Common/VFX/Coins/matLunarCoinPlaceholder.mat";
 
-        public static string AssetBundlePath
+		internal static string[] lunarInteractables = {
+			"RoR2/Base/Interactables/LunarRecycler/LunarRecycler.prefab",
+			"RoR2/Base/Interactables/LunarChest/LunarChest.prefab",
+			"RoR2/Base/Interactables/LunarShopTerminal/LunarShopTerminal.prefab",
+			"RoR2/Base/Scenes/bazaar/SeerStation.prefab",
+			"RoR2/Base/Scenes/moon/Natural/Prefabs/FrogInteractable.prefab"
+		};
+
+		public static string AssetBundlePath
 		{
 			get
 			{
@@ -37,5 +42,5 @@ namespace EphemeralCoins
 			NewMoonArtifact.smallIconSelectedSprite = mainBundle.LoadAsset<Sprite>("texArtifactNewMoonEnabled");
 			NewMoonArtifact.smallIconDeselectedSprite = mainBundle.LoadAsset<Sprite>("texArtifactNewMoonDisabled");
 		}
-    }
+	}
 }

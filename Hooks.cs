@@ -29,10 +29,19 @@ namespace EphemeralCoins
             //Coin base drop chance
             On.RoR2.PlayerCharacterMasterController.Awake += PlayerCharacterMasterController_Awake;
 
-            //Coin drop multiplier
-            BindingFlags allFlags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance | BindingFlags.DeclaredOnly;
-            var initDelegate = typeof(PlayerCharacterMasterController).GetNestedTypes(allFlags)[0].GetRuntimeMethods().First(x => x.Name.StartsWith("<Init>b__"));
-            MonoMod.RuntimeDetour.HookGen.HookEndpointManager.Modify(initDelegate, (Action<ILContext>)CoinDropHook);
+            //Coin drop multiplier (compiler-generated name changes across game updates)
+            try
+            {
+                BindingFlags allFlags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance | BindingFlags.DeclaredOnly;
+                var initDelegate = typeof(PlayerCharacterMasterController).GetNestedTypes(allFlags)[0]
+                    .GetRuntimeMethods()
+                    .First(x => x.Name.StartsWith("<Init>b__", StringComparison.Ordinal));
+                MonoMod.RuntimeDetour.HookGen.HookEndpointManager.Modify(initDelegate, (Action<ILContext>)CoinDropHook);
+            }
+            catch (Exception ex)
+            {
+                EphemeralCoins.Logger.LogError("Failed to IL-hook lunar coin drop multiplier; drop multi/min configs will not apply. " + ex);
+            }
 
             //Blue Orb on stage start chance reduction
             On.RoR2.TeleporterInteraction.Start += TeleporterInteraction_Start;
