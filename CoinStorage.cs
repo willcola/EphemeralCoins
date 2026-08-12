@@ -1,4 +1,5 @@
-﻿using RoR2;
+﻿using System;
+using RoR2;
 using UnityEngine.Networking;
 using R2API.Networking.Interfaces;
 
@@ -13,6 +14,44 @@ namespace EphemeralCoins
         public bool Matches(NetworkUser user)
         {
             return user != null && userId.Equals(user.id);
+        }
+    }
+
+    /// <summary>
+    /// JSON-friendly ProperSave payload. Uses stable NetworkUserId fields instead of NetworkInstanceId
+    /// (master object IDs are not valid across save/load).
+    /// </summary>
+    [Serializable]
+    public class EphemeralCoinSaveEntry
+    {
+        public ulong idValue;
+        public string idStr;
+        public byte idSub;
+        public string name;
+        public uint count;
+
+        public static EphemeralCoinSaveEntry From(CoinStorage storage)
+        {
+            return new EphemeralCoinSaveEntry
+            {
+                idValue = storage.userId.value,
+                idStr = storage.userId.strValue ?? "",
+                idSub = storage.userId.subId,
+                name = storage.name,
+                count = storage.ephemeralCoinCount
+            };
+        }
+
+        public CoinStorage ToCoinStorage()
+        {
+            return new CoinStorage
+            {
+                userId = !string.IsNullOrEmpty(idStr)
+                    ? NetworkUserId.FromIp(idStr, idSub)
+                    : NetworkUserId.FromId(idValue, idSub),
+                name = name,
+                ephemeralCoinCount = count
+            };
         }
     }
 

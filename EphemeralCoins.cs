@@ -15,11 +15,13 @@ namespace EphemeralCoins
     [NetworkCompatibility(CompatibilityLevel.EveryoneMustHaveMod, VersionStrictness.EveryoneNeedSameModVersion)]
     [BepInDependency("com.KingEnderBrine.ProperSave", BepInDependency.DependencyFlags.SoftDependency)]
     [BepInDependency("com.rune580.riskofoptions", BepInDependency.DependencyFlags.SoftDependency)]
-    [BepInPlugin("com.Varna.EphemeralCoins", "Ephemeral_Coins", "2.3.9")]
+    [BepInPlugin("com.Varna.EphemeralCoins", "Ephemeral_Coins", "2.3.10")]
     public class EphemeralCoins : BaseUnityPlugin
     {
         public int numTimesRerolled;
         public List<CoinStorage> coinCounts = new List<CoinStorage>();
+        /// <summary>Set when ProperSave restores coin counts so Run.Start does not treat the load as a blank slate.</summary>
+        public bool restoredCoinCountsFromSave;
 
         public bool artifactEnabled {
             get
@@ -52,8 +54,7 @@ namespace EphemeralCoins
 
             NetworkingAPI.RegisterMessageType<SyncCoinStorage>();
 
-            //Utterly broken, fix later
-            //if (ProperSaveCompatibility.enabled) ProperSaveSetup();
+            if (ProperSaveCompatibility.enabled) ProperSaveCompatibility.Setup();
         }
 
         ///
@@ -62,7 +63,11 @@ namespace EphemeralCoins
         ///
         public void SetupCoinStorage(List<CoinStorage> coinStorage, bool NewRun = true)
         {
-            if (NewRun) coinStorage.Clear();
+            if (NewRun)
+            {
+                coinStorage.Clear();
+                restoredCoinCountsFromSave = false;
+            }
             foreach (NetworkUser user in NetworkUser.readOnlyInstancesList)
             {
                 // Skipping over Disconnected Players.
@@ -195,24 +200,29 @@ namespace EphemeralCoins
             }
         }
 
-        /*
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        public void ProperSaveSetup()
+        public void ApplySavedCoinCounts(List<EphemeralCoinSaveEntry> saved)
         {
-            ProperSave.SaveFile.OnGatherSaveData += (dict) =>
+            coinCounts.Clear();
+            if (saved == null)
             {
-                if (dict.ContainsKey("ephemeralCoinCount"))
-                    dict["ephemeralCoinCount"] = coinCounts;
-                else
-                    dict.Add("ephemeralCoinCount", coinCounts);
-            };
+                restoredCoinCountsFromSave = false;
+                return;
+            }
 
-            ProperSave.Loading.OnLoadingEnded += (save) =>
+            foreach (EphemeralCoinSaveEntry entry in saved)
             {
-                coinCounts = save.GetModdedData<List<CoinStorage>>("ephemeralCoinCount");
-            };
+                if (entry == null) continue;
+                CoinStorage player = entry.ToCoinStorage();
+                coinCounts.Add(player);
+                if (NetworkServer.active)
+                {
+                    new SyncCoinStorage(player.userId, player.name, player.ephemeralCoinCount).Send(NetworkDestination.Clients);
+                }
+            }
+
+            restoredCoinCountsFromSave = true;
+            Logger.LogInfo("ProperSave: restored " + coinCounts.Count + " ephemeral coin entr" + (coinCounts.Count == 1 ? "y" : "ies") + ".");
         }
-        */
 
         ///
         /// Required for BTB to change the costs of the pre-loaded prefab instances.

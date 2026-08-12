@@ -62,11 +62,17 @@ namespace EphemeralCoins
 
             // Always ensure coin storage exists when the artifact is on (includes ProperSave loads).
             // Only award starting coins / intro chat on a fresh run.
+            // ProperSave loads restore counts via OnLoadingEnded; never clear that restored data here.
             if (NetworkServer.active && EphemeralCoins.instance.artifactEnabled)
             {
                 bool isNewRun;
                 if (ProperSaveCompatibility.enabled) { isNewRun = ProperSaveCompatibility.IsRunNew(); }
                 else { isNewRun = Run.instance.stageClearCount == 0; }
+
+                if (EphemeralCoins.instance.restoredCoinCountsFromSave)
+                {
+                    isNewRun = false;
+                }
 
                 EphemeralCoins.instance.SetupCoinStorage(EphemeralCoins.instance.coinCounts, isNewRun);
                 if (isNewRun)

@@ -1,4 +1,6 @@
-﻿using System.Runtime.CompilerServices;
+﻿using System;
+using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using BepInEx.Configuration;
 using RiskOfOptions.OptionConfigs;
 using RiskOfOptions.Options;
@@ -7,6 +9,8 @@ namespace EphemeralCoins
 {
     public static class ProperSaveCompatibility
     {
+        public const string SaveDataKey = "EphemeralCoins.coinCounts";
+
         private static bool? _enabled;
 
         public static bool enabled
@@ -24,6 +28,52 @@ namespace EphemeralCoins
         public static bool IsRunNew()
         {
             return !ProperSave.Loading.IsLoading;
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static void Setup()
+        {
+            ProperSave.SaveFile.OnGatherSaveData += OnGatherSaveData;
+            ProperSave.Loading.OnLoadingEnded += OnLoadingEnded;
+            EphemeralCoins.Logger.LogInfo("ProperSave compatibility enabled (ephemeral coin save/load).");
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void OnGatherSaveData(Dictionary<string, object> dict)
+        {
+            if (EphemeralCoins.instance == null) return;
+
+            List<EphemeralCoinSaveEntry> entries = new List<EphemeralCoinSaveEntry>();
+            foreach (CoinStorage player in EphemeralCoins.instance.coinCounts)
+            {
+                if (player == null) continue;
+                entries.Add(EphemeralCoinSaveEntry.From(player));
+            }
+
+            dict[SaveDataKey] = entries;
+            EphemeralCoins.Logger.LogDebug("ProperSave: gathered " + entries.Count + " ephemeral coin entries.");
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void OnLoadingEnded(ProperSave.SaveFile save)
+        {
+            if (EphemeralCoins.instance == null || save == null) return;
+
+            try
+            {
+                List<EphemeralCoinSaveEntry> entries = save.TryGetModdedData<List<EphemeralCoinSaveEntry>>(SaveDataKey);
+                if (entries == null)
+                {
+                    EphemeralCoins.Logger.LogDebug("ProperSave: no ephemeral coin data in save (starting at 0).");
+                    return;
+                }
+
+                EphemeralCoins.instance.ApplySavedCoinCounts(entries);
+            }
+            catch (Exception ex)
+            {
+                EphemeralCoins.Logger.LogWarning("ProperSave: failed to restore ephemeral coins: " + ex);
+            }
         }
     }
 

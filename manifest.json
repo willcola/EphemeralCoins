@@ -1,6 +1,6 @@
 {
     "name": "Ephemeral_Coins",
-    "version_number": "2.3.9",
+    "version_number": "2.3.10",
     "website_url": "https://github.com/prodzpod/EphemeralCoins",
     "description": "Lunar Coins become a per-run currency via artifact. Seperate configs for drop chance, BTB costs, etc.",
     "dependencies": [

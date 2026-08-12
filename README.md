@@ -24,10 +24,6 @@ Provides settings to control various aspects relating to Lunar Coins, including 
 - Lunar Reroller won't let you reroll if you've already bought the entire store, even if the config is set to refresh the lineup.
 - Very little multiplayer testing has been done. Please report any bugs on [Github](https://github.com/VarnaScelestus/RoR2).
 
-## Todo
-
-- Re-implement [ProperSave](https://thunderstore.io/package/KingEnderBrine/ProperSave/) compatibility.
-
 ## Credits
 
 [Magnus](https://github.com/MagnusMagnuson/RoR2Mods) - For the original code this was forked from. Not only was it an excellent starting point, it helped me learn a lot too!
@@ -35,6 +31,8 @@ Provides settings to control various aspects relating to Lunar Coins, including 
 [RoR2 modding discord](https://discord.gg/5MbXZvd) - For help in figuring out the Slab (Lunar Reroller)'s horrible, horrible internal structure, and just being awesome in general!
 
 ## Changelog
+
+2.3.10 - Restore ProperSave compatibility: ephemeral coin balances are saved/loaded with the run using stable NetworkUserId keys.
 
 2.3.9 - Fix ephemeral coin counter not updating and bazaar purchases with 0 coins: key coin storage by NetworkUserId, always initialize storage (including ProperSave loads), and never fall back to profile lunar coins while the artifact is active.
 
