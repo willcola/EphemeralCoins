@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+﻿using RoR2;
 using UnityEngine.Networking;
 using R2API.Networking.Interfaces;
 
@@ -6,29 +6,39 @@ namespace EphemeralCoins
 {
     public class CoinStorage
     {
-        public NetworkInstanceId user;
+        public NetworkUserId userId;
         public string name;
         public uint ephemeralCoinCount;
+
+        public bool Matches(NetworkUser user)
+        {
+            return user != null && userId.Equals(user.id);
+        }
     }
 
     public class SyncCoinStorage : INetMessage
     {
-        public NetworkInstanceId user;
+        public NetworkUserId userId;
         public string name;
         public uint ephemeralCoinCount;
 
         public SyncCoinStorage(){}
 
-        public SyncCoinStorage(NetworkInstanceId user, string name, uint ephemeralCoinCount)
+        public SyncCoinStorage(NetworkUserId userId, string name, uint ephemeralCoinCount)
         {
-            this.user = user;
+            this.userId = userId;
             this.name = name;
             this.ephemeralCoinCount = ephemeralCoinCount;
         }
 
         public void Deserialize(NetworkReader reader)
         {
-            user = reader.ReadNetworkId();
+            ulong value = reader.ReadPackedUInt64();
+            string strValue = reader.ReadString();
+            byte subId = reader.ReadByte();
+            userId = !string.IsNullOrEmpty(strValue)
+                ? NetworkUserId.FromIp(strValue, subId)
+                : NetworkUserId.FromId(value, subId);
             name = reader.ReadString();
             ephemeralCoinCount = reader.ReadUInt32();
         }
@@ -41,14 +51,14 @@ namespace EphemeralCoins
                 return;
             }
             CoinStorage newPlayer = new CoinStorage();
-            newPlayer.user = user;
+            newPlayer.userId = userId;
             newPlayer.name = name;
             newPlayer.ephemeralCoinCount = ephemeralCoinCount;
 
             bool flag = false;
             foreach (CoinStorage player in EphemeralCoins.instance.coinCounts)
             {
-                if (player.user.Equals(newPlayer.user))
+                if (player.userId.Equals(newPlayer.userId))
                 {
                     player.name = newPlayer.name;
                     player.ephemeralCoinCount = newPlayer.ephemeralCoinCount;
@@ -61,7 +71,9 @@ namespace EphemeralCoins
 
         public void Serialize(NetworkWriter writer)
         {
-            writer.Write(user);
+            writer.WritePackedUInt64(userId.value);
+            writer.Write(userId.strValue ?? "");
+            writer.Write(userId.subId);
             writer.Write(name);
             writer.Write(ephemeralCoinCount);
         }

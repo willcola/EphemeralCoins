@@ -36,6 +36,8 @@ Provides settings to control various aspects relating to Lunar Coins, including 
 
 ## Changelog
 
+2.3.9 - Fix ephemeral coin counter not updating and bazaar purchases with 0 coins: key coin storage by NetworkUserId, always initialize storage (including ProperSave loads), and never fall back to profile lunar coins while the artifact is active.
+
 2.3.8 - Fix multiplayer clients spawning dead/off-map: run PrefabSetup after Run.Start, update Addressable keys for current game paths, avoid SetSyncVar on shared prefabs, and harden PrefabSetup/IL hook failures so they cannot abort run init.
 
 2.3.7 - fixed for ac

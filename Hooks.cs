@@ -60,15 +60,17 @@ namespace EphemeralCoins
         {
             orig(self);
 
-            //Start message + starting coins functionality
+            // Always ensure coin storage exists when the artifact is on (includes ProperSave loads).
+            // Only award starting coins / intro chat on a fresh run.
             if (NetworkServer.active && EphemeralCoins.instance.artifactEnabled)
             {
-                bool check;
-                if (ProperSaveCompatibility.enabled) { check = ProperSaveCompatibility.IsRunNew(); }
-                else { check = Run.instance.stageClearCount == 0 ? true : false; }
-                if (check)
+                bool isNewRun;
+                if (ProperSaveCompatibility.enabled) { isNewRun = ProperSaveCompatibility.IsRunNew(); }
+                else { isNewRun = Run.instance.stageClearCount == 0; }
+
+                EphemeralCoins.instance.SetupCoinStorage(EphemeralCoins.instance.coinCounts, isNewRun);
+                if (isNewRun)
                 {
-                    EphemeralCoins.instance.SetupCoinStorage(EphemeralCoins.instance.coinCounts);
                     EphemeralCoins.instance.StartCoroutine(EphemeralCoins.instance.DelayedStartingLunarCoins());
                 }
             }
@@ -80,7 +82,11 @@ namespace EphemeralCoins
             orig(self);
             if (EphemeralCoins.instance.artifactEnabled)
             {
-                self.lunarCoinText.targetValue = (int)EphemeralCoins.instance.getCoinsFromUser(self._localUserViewer.currentNetworkUser);
+                NetworkUser networkUser = self._localUserViewer != null ? self._localUserViewer.currentNetworkUser : null;
+                if (networkUser != null)
+                {
+                    self.lunarCoinText.targetValue = (int)EphemeralCoins.instance.getCoinsFromUser(networkUser);
+                }
                 if (self.lunarCoinContainer.transform.Find("LunarCoinSign") != null) self.lunarCoinContainer.transform.Find("LunarCoinSign").GetComponent<RoR2.UI.HGTextMeshProUGUI>().text = "<sprite name=\"LunarCoin\" color=#adf2fa>";
             }
         }

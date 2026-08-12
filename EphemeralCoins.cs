@@ -6,6 +6,7 @@ using RoR2;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Networking;
 
 namespace EphemeralCoins
 {
@@ -14,7 +15,7 @@ namespace EphemeralCoins
     [NetworkCompatibility(CompatibilityLevel.EveryoneMustHaveMod, VersionStrictness.EveryoneNeedSameModVersion)]
     [BepInDependency("com.KingEnderBrine.ProperSave", BepInDependency.DependencyFlags.SoftDependency)]
     [BepInDependency("com.rune580.riskofoptions", BepInDependency.DependencyFlags.SoftDependency)]
-    [BepInPlugin("com.Varna.EphemeralCoins", "Ephemeral_Coins", "2.3.8")]
+    [BepInPlugin("com.Varna.EphemeralCoins", "Ephemeral_Coins", "2.3.9")]
     public class EphemeralCoins : BaseUnityPlugin
     {
         public int numTimesRerolled;
@@ -57,6 +58,7 @@ namespace EphemeralCoins
 
         ///
         /// Based on the PlayerStorage system used in https://github.com/WondaMegapon/Refightilization/blob/master/Refightilization/Refightilization.cs
+        /// Keys players by NetworkUserId (stable) rather than Network_masterObjectId (can be invalid early / mid-run).
         ///
         public void SetupCoinStorage(List<CoinStorage> coinStorage, bool NewRun = true)
         {
@@ -76,7 +78,7 @@ namespace EphemeralCoins
                     bool flag = false;
                     foreach (CoinStorage player in coinStorage)
                     {
-                        if (player.user.Equals(user.id))
+                        if (player.Matches(user))
                         {
                             flag = true;
                             break;
@@ -84,47 +86,59 @@ namespace EphemeralCoins
                     }
                     if (flag) continue;
                 }
-                CoinStorage newPlayer = new CoinStorage();
-                newPlayer.user = user.Network_masterObjectId;
-                newPlayer.name = user.userName;
-                newPlayer.ephemeralCoinCount = 0;
-                coinStorage.Add(newPlayer);
+                // Sync from setup only — award/deduct RPCs already update every peer.
+                CoinStorage newPlayer = EnsureUser(user, syncToClients: true);
                 Logger.LogDebug(newPlayer.name + " added to CoinStorage!");
-                new SyncCoinStorage(newPlayer.user, newPlayer.name, 0).Send(NetworkDestination.Clients);
             }
             Logger.LogDebug("Setting up CoinStorage finished.");
         }
 
-        public void giveCoinsToUser(NetworkUser user, uint count)
+        public CoinStorage EnsureUser(NetworkUser user, bool syncToClients = false)
         {
+            if (user == null) return null;
             foreach (CoinStorage player in coinCounts)
             {
-                if (player.user.Equals(user.Network_masterObjectId))
+                if (player.Matches(user))
                 {
-                    player.ephemeralCoinCount += count;
-                    Logger.LogDebug("giveCoinsToUser: " + user.userName + " " + count);
+                    if (string.IsNullOrEmpty(player.name)) player.name = user.userName;
+                    return player;
                 }
             }
+            CoinStorage newPlayer = new CoinStorage();
+            newPlayer.userId = user.id;
+            newPlayer.name = user.userName;
+            newPlayer.ephemeralCoinCount = 0;
+            coinCounts.Add(newPlayer);
+            if (syncToClients && NetworkServer.active)
+            {
+                new SyncCoinStorage(newPlayer.userId, newPlayer.name, newPlayer.ephemeralCoinCount).Send(NetworkDestination.Clients);
+            }
+            return newPlayer;
+        }
+
+        public void giveCoinsToUser(NetworkUser user, uint count)
+        {
+            CoinStorage player = EnsureUser(user);
+            if (player == null) return;
+            player.ephemeralCoinCount += count;
+            Logger.LogDebug("giveCoinsToUser: " + user.userName + " " + count + " -> " + player.ephemeralCoinCount);
         }
 
         public void takeCoinsFromUser(NetworkUser user, uint count)
         {
-            foreach (CoinStorage player in coinCounts)
-            {
-                if (player.user.Equals(user.Network_masterObjectId))
-                {
-                    player.ephemeralCoinCount -= count;
-                    Logger.LogDebug("takeCoinsFromUser: " + user.userName + " " + count);
-                }
-            }
+            CoinStorage player = EnsureUser(user);
+            if (player == null) return;
+            if (count > player.ephemeralCoinCount) player.ephemeralCoinCount = 0;
+            else player.ephemeralCoinCount -= count;
+            Logger.LogDebug("takeCoinsFromUser: " + user.userName + " " + count + " -> " + player.ephemeralCoinCount);
         }
 
         public uint getCoinsFromUser(NetworkUser user)
         {
-            if (Run.instance != null) {
+            if (Run.instance != null && user != null) {
                 foreach (CoinStorage player in coinCounts)
                 {
-                    if (player.user.Equals(user.Network_masterObjectId))
+                    if (player.Matches(user))
                     {
                         //Spams the console due to HUD hook, only used for debugging.
                         //Logger.LogDebug("getCoinsFromUser: " + user.userName + player.ephemeralCoinCount);
@@ -148,16 +162,13 @@ namespace EphemeralCoins
                 isAffordable = delegate (CostTypeDef costTypeDef, CostTypeDef.IsAffordableContext context)
                 {
                     NetworkUser networkUser2 = Util.LookUpBodyNetworkUser(context.activator.gameObject);
-                    if (artifactEnabled) {
-                        foreach (CoinStorage player in coinCounts)
-                        {
-                            if (player.user.Equals(networkUser2.Network_masterObjectId))
-                            {
-                                return player.ephemeralCoinCount >= context.cost;
-                            }
-                        }
+                    if (!(bool)networkUser2) return false;
+                    // When the artifact is active, never fall back to profile/lunarCoins — that lets shops ignore ephemeral balance.
+                    if (artifactEnabled)
+                    {
+                        return getCoinsFromUser(networkUser2) >= context.cost;
                     }
-                    return (bool)networkUser2 && networkUser2.lunarCoins >= context.cost;
+                    return networkUser2.lunarCoins >= context.cost;
                 },
                 payCost = delegate (CostTypeDef.PayCostContext context, CostTypeDef.PayCostResults results)
                 {
