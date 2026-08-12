@@ -1,9 +1,12 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using BepInEx.Configuration;
 using RiskOfOptions.OptionConfigs;
 using RiskOfOptions.Options;
+using RoR2;
+using UnityEngine;
 
 namespace EphemeralCoins
 {
@@ -12,6 +15,17 @@ namespace EphemeralCoins
         public const string SaveDataKey = "EphemeralCoins.coinCounts";
 
         private static bool? _enabled;
+        private static List<EphemeralCoinSaveEntry> _lastRestored;
+        private static int _preserveLoadId;
+        private static int _loadId;
+        private static int _delayedReapplyLoadId;
+        private static bool _stageHooked;
+
+        /// <summary>
+        /// True only during the current ProperSave load window (OnLoadingEnded → first stage gather).
+        /// </summary>
+        public static bool ShouldPreserveRestoredCoins =>
+            _preserveLoadId != 0 && _preserveLoadId == _loadId && _lastRestored != null;
 
         public static bool enabled
         {
@@ -31,17 +45,52 @@ namespace EphemeralCoins
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
+        public static bool IsLoading()
+        {
+            try
+            {
+                return ProperSave.Loading.IsLoading;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
         public static void Setup()
         {
             ProperSave.SaveFile.OnGatherSaveData += OnGatherSaveData;
             ProperSave.Loading.OnLoadingEnded += OnLoadingEnded;
+            if (!_stageHooked)
+            {
+                Stage.onStageStartGlobal += OnStageStartGlobal;
+                Run.onRunDestroyGlobal += OnRunDestroyGlobal;
+                _stageHooked = true;
+            }
             EphemeralCoins.Logger.LogInfo("ProperSave compatibility enabled (ephemeral coin save/load).");
+        }
+
+        private static void OnRunDestroyGlobal(Run run)
+        {
+            ClearRestoredSnapshot();
+            if (EphemeralCoins.instance != null)
+            {
+                EphemeralCoins.instance.coinCounts.Clear();
+                EphemeralCoins.instance.restoredCoinCountsFromSave = false;
+            }
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static void OnGatherSaveData(Dictionary<string, object> dict)
         {
             if (EphemeralCoins.instance == null) return;
+
+            if (ShouldPreserveRestoredCoins)
+            {
+                EphemeralCoins.instance.ApplySavedCoinCounts(_lastRestored);
+            }
+            _preserveLoadId = 0;
 
             List<EphemeralCoinSaveEntry> entries = new List<EphemeralCoinSaveEntry>();
             foreach (CoinStorage player in EphemeralCoins.instance.coinCounts)
@@ -68,12 +117,58 @@ namespace EphemeralCoins
                     return;
                 }
 
-                EphemeralCoins.instance.ApplySavedCoinCounts(entries);
+                _loadId++;
+                _preserveLoadId = _loadId;
+                _delayedReapplyLoadId = _loadId;
+                _lastRestored = CloneList(entries);
+                EphemeralCoins.instance.ApplySavedCoinCounts(_lastRestored);
+                EphemeralCoins.instance.StartCoroutine(PostLoadReapplyCoroutine(_loadId));
             }
             catch (Exception ex)
             {
                 EphemeralCoins.Logger.LogWarning("ProperSave: failed to restore ephemeral coins: " + ex);
             }
+        }
+
+        private static void OnStageStartGlobal(Stage stage)
+        {
+            if (!ShouldPreserveRestoredCoins || EphemeralCoins.instance == null) return;
+            EphemeralCoins.instance.ApplySavedCoinCounts(_lastRestored);
+        }
+
+        private static IEnumerator PostLoadReapplyCoroutine(int loadId)
+        {
+            yield return new WaitForSeconds(1f);
+            if (loadId != _delayedReapplyLoadId || _lastRestored == null || EphemeralCoins.instance == null) yield break;
+            EphemeralCoins.instance.ApplySavedCoinCounts(_lastRestored);
+            EphemeralCoins.Logger.LogDebug("ProperSave: re-applied ephemeral coin snapshot after load settle.");
+            if (_preserveLoadId == 0) _lastRestored = null;
+        }
+
+        public static void ClearRestoredSnapshot()
+        {
+            _loadId++;
+            _preserveLoadId = 0;
+            _delayedReapplyLoadId = 0;
+            _lastRestored = null;
+        }
+
+        private static List<EphemeralCoinSaveEntry> CloneList(List<EphemeralCoinSaveEntry> source)
+        {
+            List<EphemeralCoinSaveEntry> copy = new List<EphemeralCoinSaveEntry>(source.Count);
+            foreach (EphemeralCoinSaveEntry entry in source)
+            {
+                if (entry == null) continue;
+                copy.Add(new EphemeralCoinSaveEntry
+                {
+                    idValue = entry.idValue,
+                    idStr = entry.idStr,
+                    idSub = entry.idSub,
+                    name = entry.name,
+                    count = entry.count
+                });
+            }
+            return copy;
         }
     }
 

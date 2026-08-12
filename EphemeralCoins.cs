@@ -67,6 +67,7 @@ namespace EphemeralCoins
             {
                 coinStorage.Clear();
                 restoredCoinCountsFromSave = false;
+                if (ProperSaveCompatibility.enabled) ProperSaveCompatibility.ClearRestoredSnapshot();
             }
             foreach (NetworkUser user in NetworkUser.readOnlyInstancesList)
             {
@@ -80,35 +81,45 @@ namespace EphemeralCoins
                 // If this is ran mid-stage, just skip over existing players and add anybody who joined.
                 if (!NewRun && coinStorage != null)
                 {
-                    bool flag = false;
-                    foreach (CoinStorage player in coinStorage)
+                    CoinStorage existing = FindUser(user);
+                    if (existing != null)
                     {
-                        if (player.Matches(user))
-                        {
-                            flag = true;
-                            break;
-                        }
+                        existing.userId = user.id;
+                        if (string.IsNullOrEmpty(existing.name)) existing.name = user.userName;
+                        continue;
                     }
-                    if (flag) continue;
                 }
-                // Sync from setup only — award/deduct RPCs already update every peer.
-                CoinStorage newPlayer = EnsureUser(user, syncToClients: true);
+                CoinStorage newPlayer = EnsureUser(user, syncToClients: false);
                 Logger.LogDebug(newPlayer.name + " added to CoinStorage!");
             }
+
+            // Clients need a full authority push after setup/restore (id rebinds included).
+            SyncAllCoinCountsToClients();
             Logger.LogDebug("Setting up CoinStorage finished.");
+        }
+
+        public CoinStorage FindUser(NetworkUser user)
+        {
+            if (user == null) return null;
+            foreach (CoinStorage player in coinCounts)
+            {
+                if (player.Matches(user)) return player;
+            }
+            return null;
         }
 
         public CoinStorage EnsureUser(NetworkUser user, bool syncToClients = false)
         {
             if (user == null) return null;
-            foreach (CoinStorage player in coinCounts)
+            CoinStorage existing = FindUser(user);
+            if (existing != null)
             {
-                if (player.Matches(user))
-                {
-                    if (string.IsNullOrEmpty(player.name)) player.name = user.userName;
-                    return player;
-                }
+                // Rebind id after ProperSave reload when saved id shape differs from live id.
+                existing.userId = user.id;
+                if (string.IsNullOrEmpty(existing.name)) existing.name = user.userName;
+                return existing;
             }
+
             CoinStorage newPlayer = new CoinStorage();
             newPlayer.userId = user.id;
             newPlayer.name = user.userName;
@@ -121,35 +132,52 @@ namespace EphemeralCoins
             return newPlayer;
         }
 
+        public void SyncAllCoinCountsToClients()
+        {
+            if (!NetworkServer.active) return;
+            foreach (CoinStorage player in coinCounts)
+            {
+                if (player == null) continue;
+                new SyncCoinStorage(player.userId, player.name, player.ephemeralCoinCount).Send(NetworkDestination.Clients);
+            }
+        }
+
         public void giveCoinsToUser(NetworkUser user, uint count)
         {
+            // ProperSave load can replay lunar award RPCs; ignore while loading.
+            if (ProperSaveCompatibility.enabled && ProperSaveCompatibility.IsLoading()) return;
+
             CoinStorage player = EnsureUser(user);
             if (player == null) return;
             player.ephemeralCoinCount += count;
+            if (NetworkServer.active)
+            {
+                new SyncCoinStorage(player.userId, player.name, player.ephemeralCoinCount).Send(NetworkDestination.Clients);
+            }
             Logger.LogDebug("giveCoinsToUser: " + user.userName + " " + count + " -> " + player.ephemeralCoinCount);
         }
 
         public void takeCoinsFromUser(NetworkUser user, uint count)
         {
+            // ProperSave load can replay lunar deduct RPCs; ignore while loading.
+            if (ProperSaveCompatibility.enabled && ProperSaveCompatibility.IsLoading()) return;
+
             CoinStorage player = EnsureUser(user);
             if (player == null) return;
             if (count > player.ephemeralCoinCount) player.ephemeralCoinCount = 0;
             else player.ephemeralCoinCount -= count;
+            if (NetworkServer.active)
+            {
+                new SyncCoinStorage(player.userId, player.name, player.ephemeralCoinCount).Send(NetworkDestination.Clients);
+            }
             Logger.LogDebug("takeCoinsFromUser: " + user.userName + " " + count + " -> " + player.ephemeralCoinCount);
         }
 
         public uint getCoinsFromUser(NetworkUser user)
         {
             if (Run.instance != null && user != null) {
-                foreach (CoinStorage player in coinCounts)
-                {
-                    if (player.Matches(user))
-                    {
-                        //Spams the console due to HUD hook, only used for debugging.
-                        //Logger.LogDebug("getCoinsFromUser: " + user.userName + player.ephemeralCoinCount);
-                        return player.ephemeralCoinCount;
-                    }
-                }
+                CoinStorage player = FindUser(user);
+                if (player != null) return player.ephemeralCoinCount;
             }
             return 0;
         }
@@ -210,12 +238,21 @@ namespace EphemeralCoins
             foreach (EphemeralCoinSaveEntry entry in saved)
             {
                 if (entry == null) continue;
-                CoinStorage player = entry.ToCoinStorage();
-                coinCounts.Add(player);
-                if (NetworkServer.active)
+                coinCounts.Add(entry.ToCoinStorage());
+            }
+
+            // Rebind live NetworkUsers (id shape can differ after ProperSave reload) then push to clients.
+            if (NetworkServer.active)
+            {
+                foreach (NetworkUser user in NetworkUser.readOnlyInstancesList)
                 {
-                    new SyncCoinStorage(player.userId, player.name, player.ephemeralCoinCount).Send(NetworkDestination.Clients);
+                    if (user == null) continue;
+                    CoinStorage player = FindUser(user);
+                    if (player == null) continue;
+                    player.userId = user.id;
+                    player.name = user.userName;
                 }
+                SyncAllCoinCountsToClients();
             }
 
             restoredCoinCountsFromSave = true;

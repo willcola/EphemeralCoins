@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>netstandard2.1</TargetFramework>
@@ -16,12 +16,18 @@
 
   <ItemGroup>
     <Compile Remove="EphemeralCoins\**" />
+    <Compile Remove="EphemeralCoinsMultiplayerPatch\**" />
+    <Compile Remove="Ephemeral Coins Multiplayer Patch\**" />
     <Compile Remove="plugins\**" />
     <Compile Remove="UnityProject\**" />
     <EmbeddedResource Remove="EphemeralCoins\**" />
+    <EmbeddedResource Remove="EphemeralCoinsMultiplayerPatch\**" />
+    <EmbeddedResource Remove="Ephemeral Coins Multiplayer Patch\**" />
     <EmbeddedResource Remove="plugins\**" />
     <EmbeddedResource Remove="UnityProject\**" />
     <None Remove="EphemeralCoins\**" />
+    <None Remove="EphemeralCoinsMultiplayerPatch\**" />
+    <None Remove="Ephemeral Coins Multiplayer Patch\**" />
     <None Remove="plugins\**" />
     <None Remove="UnityProject\**" />
   </ItemGroup>

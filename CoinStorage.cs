@@ -13,7 +13,20 @@ namespace EphemeralCoins
 
         public bool Matches(NetworkUser user)
         {
-            return user != null && userId.Equals(user.id);
+            if (user == null) return false;
+            if (userId.Equals(user.id)) return true;
+            // ProperSave reload can change NetworkUserId shape; fall back to stable display name.
+            return !string.IsNullOrEmpty(name)
+                && !string.IsNullOrEmpty(user.userName)
+                && string.Equals(name, user.userName, StringComparison.Ordinal);
+        }
+
+        public bool Matches(NetworkUserId id, string userName)
+        {
+            if (userId.Equals(id)) return true;
+            return !string.IsNullOrEmpty(name)
+                && !string.IsNullOrEmpty(userName)
+                && string.Equals(name, userName, StringComparison.Ordinal);
         }
     }
 
@@ -89,23 +102,26 @@ namespace EphemeralCoins
                 EphemeralCoins.Logger.LogWarning("SyncCoinStorage: Host ran this. Skipping.");
                 return;
             }
-            CoinStorage newPlayer = new CoinStorage();
-            newPlayer.userId = userId;
-            newPlayer.name = name;
-            newPlayer.ephemeralCoinCount = ephemeralCoinCount;
 
-            bool flag = false;
+            if (EphemeralCoins.instance == null) return;
+
             foreach (CoinStorage player in EphemeralCoins.instance.coinCounts)
             {
-                if (player.userId.Equals(newPlayer.userId))
+                if (player.Matches(userId, name))
                 {
-                    player.name = newPlayer.name;
-                    player.ephemeralCoinCount = newPlayer.ephemeralCoinCount;
-                    flag = true;
-                    break;
+                    player.userId = userId;
+                    if (!string.IsNullOrEmpty(name)) player.name = name;
+                    player.ephemeralCoinCount = ephemeralCoinCount;
+                    return;
                 }
             }
-            if (!flag) EphemeralCoins.instance.coinCounts.Add(newPlayer);
+
+            EphemeralCoins.instance.coinCounts.Add(new CoinStorage
+            {
+                userId = userId,
+                name = name,
+                ephemeralCoinCount = ephemeralCoinCount
+            });
         }
 
         public void Serialize(NetworkWriter writer)

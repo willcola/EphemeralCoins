@@ -1,4 +1,4 @@
-﻿using BepInEx;
+using BepInEx;
 using MonoMod.Cil;
 using R2API.Utils;
 using RoR2;
@@ -75,16 +75,24 @@ namespace EphemeralCoins
 
             // Always ensure coin storage exists when the artifact is on (includes ProperSave loads).
             // Only award starting coins / intro chat on a fresh run.
-            // ProperSave loads restore counts via OnLoadingEnded; never clear that restored data here.
+            // ProperSave loads restore via OnLoadingEnded; preserve only during that load window.
             if (NetworkServer.active && EphemeralCoins.instance.artifactEnabled)
             {
                 bool isNewRun;
-                if (ProperSaveCompatibility.enabled) { isNewRun = ProperSaveCompatibility.IsRunNew(); }
-                else { isNewRun = Run.instance.stageClearCount == 0; }
-
-                if (EphemeralCoins.instance.restoredCoinCountsFromSave)
+                if (ProperSaveCompatibility.enabled)
                 {
-                    isNewRun = false;
+                    isNewRun = !ProperSaveCompatibility.IsLoading()
+                        && !ProperSaveCompatibility.ShouldPreserveRestoredCoins;
+                }
+                else
+                {
+                    isNewRun = Run.instance.stageClearCount == 0;
+                }
+
+                if (isNewRun)
+                {
+                    EphemeralCoins.instance.restoredCoinCountsFromSave = false;
+                    if (ProperSaveCompatibility.enabled) ProperSaveCompatibility.ClearRestoredSnapshot();
                 }
 
                 EphemeralCoins.instance.SetupCoinStorage(EphemeralCoins.instance.coinCounts, isNewRun);
@@ -123,7 +131,11 @@ namespace EphemeralCoins
             if (EphemeralCoins.instance.artifactEnabled)
             {
                 orig(self, 0);
-                EphemeralCoins.instance.giveCoinsToUser(self, count);
+                // ProperSave load can replay lunar award RPCs; ignore while loading.
+                if (!ProperSaveCompatibility.enabled || !ProperSaveCompatibility.IsLoading())
+                {
+                    EphemeralCoins.instance.giveCoinsToUser(self, count);
+                }
                 self.SyncLunarCoinsToServer();
             }
             else orig(self, count);
@@ -134,7 +146,11 @@ namespace EphemeralCoins
             if (EphemeralCoins.instance.artifactEnabled)
             {
                 orig(self, 0);
-                EphemeralCoins.instance.takeCoinsFromUser(self, count);
+                // ProperSave load can replay lunar deduct RPCs; ignore while loading.
+                if (!ProperSaveCompatibility.enabled || !ProperSaveCompatibility.IsLoading())
+                {
+                    EphemeralCoins.instance.takeCoinsFromUser(self, count);
+                }
                 self.SyncLunarCoinsToServer();
             }
             else orig(self, count);
