@@ -155,39 +155,37 @@ namespace EphemeralCoins
         }
 
         ///
-        /// Override the CostType delegates so that we can use a different coin count check when the artifact is active. Hacky, but works.
+        /// Override LunarCoin affordability so shops check ephemeral balance when the artifact is active.
+        /// CostTypeCatalog.Register is private on runtime RoR2.dll — mutate the existing CostTypeDef instead.
         /// 
         public void AddCostType()
         {
-            CostTypeDef newdef = new CostTypeDef
+            try
             {
-                costStringFormatToken = "COST_LUNARCOIN_FORMAT",
-                saturateWorldStyledCostString = false,
-                darkenWorldStyledCostString = true,
-                isAffordable = delegate (CostTypeDef costTypeDef, CostTypeDef.IsAffordableContext context)
+                CostTypeDef def = CostTypeCatalog.GetCostTypeDef(CostTypeIndex.LunarCoin);
+                if (def == null)
                 {
-                    NetworkUser networkUser2 = Util.LookUpBodyNetworkUser(context.activator.gameObject);
-                    if (!(bool)networkUser2) return false;
+                    Logger.LogWarning("LunarCoin CostTypeDef missing; shop affordability override skipped.");
+                    return;
+                }
+
+                def.isAffordable = delegate (CostTypeDef costTypeDef, CostTypeDef.IsAffordableContext context)
+                {
+                    NetworkUser networkUser = Util.LookUpBodyNetworkUser(context.activator.gameObject);
+                    if (!(bool)networkUser) return false;
                     // When the artifact is active, never fall back to profile/lunarCoins — that lets shops ignore ephemeral balance.
                     if (artifactEnabled)
                     {
-                        return getCoinsFromUser(networkUser2) >= context.cost;
+                        return getCoinsFromUser(networkUser) >= context.cost;
                     }
-                    return networkUser2.lunarCoins >= context.cost;
-                },
-                payCost = delegate (CostTypeDef.PayCostContext context, CostTypeDef.PayCostResults results)
-                {
-                    NetworkUser networkUser = Util.LookUpBodyNetworkUser(context.activator.gameObject);
-                    if ((bool)networkUser)
-                    {
-                        networkUser.DeductLunarCoins((uint)context.cost);
-                        RoR2.Items.MultiShopCardUtils.OnNonMoneyPurchase(context);
-                    }
-                },
-                colorIndex = ColorCatalog.ColorIndex.LunarCoin
-            };
-
-            CostTypeCatalog.Register(CostTypeIndex.LunarCoin, newdef);
+                    return networkUser.lunarCoins >= context.cost;
+                };
+                Logger.LogDebug("LunarCoin isAffordable delegate overridden.");
+            }
+            catch (System.Exception ex)
+            {
+                Logger.LogError("Failed to override LunarCoin affordability (load will continue): " + ex);
+            }
         }
 
         public void AlwaysOnMode()

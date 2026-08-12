@@ -11,6 +11,11 @@ namespace EphemeralCoins
 {
     public class Hooks
     {
+        // HUD._localUserViewer is private on runtime RoR2.dll (publicizer is compile-only).
+        private static readonly FieldInfo LocalUserViewerField = typeof(RoR2.UI.HUD).GetField(
+            "_localUserViewer",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
         public static void Init()
         {
             //main setup hook; this is where most of the mod's settings are applied
@@ -60,6 +65,14 @@ namespace EphemeralCoins
         {
             orig(self);
 
+            // Always-on mode runs PrefabSetup during onLoad before PickupCatalog is ready.
+            // Re-apply visuals on every peer once the run has started (artifact mode also
+            // re-applies via NewMoonArtifactManager.Run_Start; this covers always-on).
+            if (EphemeralCoins.instance.artifactEnabled)
+            {
+                NewMoonArtifactManager.PrefabSetup(true);
+            }
+
             // Always ensure coin storage exists when the artifact is on (includes ProperSave loads).
             // Only award starting coins / intro chat on a fresh run.
             // ProperSave loads restore counts via OnLoadingEnded; never clear that restored data here.
@@ -88,7 +101,8 @@ namespace EphemeralCoins
             orig(self);
             if (EphemeralCoins.instance.artifactEnabled)
             {
-                NetworkUser networkUser = self._localUserViewer != null ? self._localUserViewer.currentNetworkUser : null;
+                LocalUser localUser = LocalUserViewerField?.GetValue(self) as LocalUser;
+                NetworkUser networkUser = localUser != null ? localUser.currentNetworkUser : null;
                 if (networkUser != null)
                 {
                     self.lunarCoinText.targetValue = (int)EphemeralCoins.instance.getCoinsFromUser(networkUser);

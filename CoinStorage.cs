@@ -34,9 +34,9 @@ namespace EphemeralCoins
         {
             return new EphemeralCoinSaveEntry
             {
-                idValue = storage.userId.value,
-                idStr = storage.userId.strValue ?? "",
-                idSub = storage.userId.subId,
+                idValue = NetworkUserIdAccess.GetValue(storage.userId),
+                idStr = NetworkUserIdAccess.GetStrValue(storage.userId) ?? "",
+                idSub = NetworkUserIdAccess.GetSubId(storage.userId),
                 name = storage.name,
                 count = storage.ephemeralCoinCount
             };
@@ -110,9 +110,9 @@ namespace EphemeralCoins
 
         public void Serialize(NetworkWriter writer)
         {
-            writer.WritePackedUInt64(userId.value);
-            writer.Write(userId.strValue ?? "");
-            writer.Write(userId.subId);
+            writer.WritePackedUInt64(NetworkUserIdAccess.GetValue(userId));
+            writer.Write(NetworkUserIdAccess.GetStrValue(userId) ?? "");
+            writer.Write(NetworkUserIdAccess.GetSubId(userId));
             writer.Write(name);
             writer.Write(ephemeralCoinCount);
         }

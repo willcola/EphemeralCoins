@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Reflection;
 using RoR2;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
@@ -86,8 +87,8 @@ namespace EphemeralCoins
 			///
 			/// Swap the Lunar Coin's model and pickup settings around based on whether the artifact is enabled.
 			///
-			PickupIndex coinIndex = PickupCatalog.FindPickupIndex("LunarCoin.Coin0");
-			PickupDef TheCoinDef = coinIndex.pickupDef;
+			// Prefer GetPickupDef — PickupIndex.pickupDef is inaccessible on runtime RoR2.dll.
+			PickupDef TheCoinDef = PickupCatalog.GetPickupDef(PickupCatalog.FindPickupIndex("LunarCoin.Coin0"));
 			if (TheCoinDef == null)
 			{
 				EphemeralCoins.Logger.LogWarning("PrefabSetup: LunarCoin.Coin0 pickup def missing; skipping coin visual updates.");
@@ -172,8 +173,15 @@ namespace EphemeralCoins
 						break;
 					case "FrogInteractable":
 						zValue = (int)BepConfig.FrogCost.Value;
+						// maxPets is not publicly accessible on runtime RoR2.dll (publicizer is compile-only).
 						FrogController frog = z.GetComponent<FrogController>();
-						if (frog) frog.maxPets = (int)BepConfig.FrogPets.Value;
+						if (frog)
+						{
+							FieldInfo maxPets = typeof(FrogController).GetField(
+								"maxPets",
+								BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+							maxPets?.SetValue(frog, (int)BepConfig.FrogPets.Value);
+						}
 						break;
 					default:
 						EphemeralCoins.Logger.LogWarning("Unknown lunarInteractable " + x + ", will default to 0 cost!");
